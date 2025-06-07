@@ -29,8 +29,8 @@ const Layout = ({ children, handleLogout, onPhotoUploadSuccess, selectedFilterTa
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        const data: { name: string }[] = await response.json();
-        setAvailableTags(data.map(tag => tag.name));
+        const data: string[] = await response.json();
+        setAvailableTags(data);
       } catch (e: any) {
         setTagsError(`Failed to fetch tags: ${e.message}`);
         console.error("Error fetching tags:", e);
@@ -41,12 +41,11 @@ const Layout = ({ children, handleLogout, onPhotoUploadSuccess, selectedFilterTa
     fetchTags();
   }, [tagsRefreshKey]);
 
-  const handleTagCheckboxChange = (tag: string) => {
-    if (selectedFilterTags.includes(tag)) {
-      onFilterTagsChange(selectedFilterTags.filter(t => t !== tag));
-    } else {
-      onFilterTagsChange([...selectedFilterTags, tag]);
-    }
+  const handleTagClick = (tag: string) => {
+    const newSelectedTags = selectedFilterTags.includes(tag)
+      ? selectedFilterTags.filter(t => t !== tag)
+      : [...selectedFilterTags, tag];
+    onFilterTagsChange(newSelectedTags);
   };
 
   return (
@@ -87,14 +86,14 @@ const Layout = ({ children, handleLogout, onPhotoUploadSuccess, selectedFilterTa
             <Text fontSize="sm" color="gray.500">No tags available.</Text>
           )}
           {!loadingTags && !tagsError && availableTags.length > 0 && (
-            <Wrap spacing={2} justify="center">
+            <Wrap spacing={2}>
               {availableTags.map((tag) => (
                 <WrapItem key={tag}>
                   <Button
                     size="sm"
                     variant={selectedFilterTags.includes(tag) ? "solid" : "outline"}
                     colorScheme={selectedFilterTags.includes(tag) ? "blue" : "gray"}
-                    onClick={() => handleTagCheckboxChange(tag)}
+                    onClick={() => handleTagClick(tag)}
                   >
                     {tag}
                   </Button>
