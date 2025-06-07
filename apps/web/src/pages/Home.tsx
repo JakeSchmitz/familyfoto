@@ -32,23 +32,6 @@ const Home = () => {
           ))}
         </SimpleGrid>
       </Box>
-
-      {/* Footer */}
-      <Box
-        as="footer"
-        py={6}
-        px={4}
-        bg="gray.50"
-        borderTop="1px"
-        borderColor="gray.200"
-        zIndex={1}
-      >
-        <Flex justify="center" maxW="container.xl" mx="auto">
-          <Text textAlign="center" color="gray.600">
-            © {new Date().getFullYear()} FamilyFoto. All rights reserved.
-          </Text>
-        </Flex>
-      </Box>
     </Flex>
   );
 };

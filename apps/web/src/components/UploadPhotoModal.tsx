@@ -10,29 +10,54 @@ import {
   FormControl,
   FormLabel,
   Input,
-  Select,
   Box,
   Text,
   useToast,
+  Tag,
+  TagLabel,
+  TagCloseButton,
+  Flex,
 } from '@chakra-ui/react';
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useRef, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
+import ExifReader from 'exifreader';
 
 interface UploadPhotoModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+const defaultTags = ["family", "wildlife", "other"];
+
 const UploadPhotoModal = ({ isOpen, onClose }: UploadPhotoModalProps) => {
   const [description, setDescription] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [locationData, setLocationData] = useState<string | null>(null);
+  const [tagInputValue, setTagInputValue] = useState('');
+  const tagInputRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
+  const onDrop = useCallback(async (acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
-      setFile(acceptedFiles[0]);
+      const droppedFile = acceptedFiles[0];
+      setFile(droppedFile);
+      setLocationData(null); // Clear previous location
+
+      try {
+        const tags = await ExifReader.load(droppedFile, { expanded: true }); // Read EXIF data
+        if (tags.gps && tags.gps.Latitude && tags.gps.Longitude) {
+          const latitude = tags.gps.Latitude;
+          const longitude = tags.gps.Longitude;
+          setLocationData(`Location: ${latitude}, ${longitude}`);
+        } else {
+          setLocationData('Location: Not available');
+        }
+      } catch (error) {
+        console.error('Error reading EXIF data:', error);
+        setLocationData('Location: Error reading data');
+      }
     }
   }, []);
 
@@ -44,6 +69,50 @@ const UploadPhotoModal = ({ isOpen, onClose }: UploadPhotoModalProps) => {
     maxFiles: 1
   });
 
+  const handleAddTag = (tag: string) => {
+    const normalizedTag = tag.trim().toLowerCase();
+    if (normalizedTag && !selectedTags.includes(normalizedTag)) {
+      setSelectedTags((prev) => [...prev, normalizedTag]);
+      setTagInputValue('');
+      if (tagInputRef.current) {
+        tagInputRef.current.focus();
+      }
+    }
+  };
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    setSelectedTags((prev) => prev.filter((tag) => tag !== tagToRemove));
+  };
+
+  const handleTagInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTagInputValue(e.target.value);
+  };
+
+  const handleTagInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && tagInputValue.trim() !== '') {
+      e.preventDefault(); // Prevent form submission
+      handleAddTag(tagInputValue);
+    }
+  };
+
+  const suggestedTags = defaultTags.filter(
+    (tag) =>
+      tag.toLowerCase().includes(tagInputValue.toLowerCase()) &&
+      !selectedTags.includes(tag)
+  );
+
+  useEffect(() => {
+    if (!isOpen) {
+      // Reset form when modal closes
+      setDescription('');
+      setSelectedTags([]);
+      setFile(null);
+      setLocationData(null);
+      setTagInputValue('');
+      setIsUploading(false);
+    }
+  }, [isOpen]);
+
   const handleSubmit = async () => {
     if (!file) return;
 
@@ -52,6 +121,9 @@ const UploadPhotoModal = ({ isOpen, onClose }: UploadPhotoModalProps) => {
     formData.append('photo', file);
     formData.append('description', description);
     formData.append('tags', JSON.stringify(selectedTags));
+    if (locationData && locationData !== 'Location: Not available' && locationData !== 'Location: Error reading data') {
+      formData.append('location', locationData);
+    }
 
     try {
       const response = await fetch('http://localhost:3000/api/upload', {
@@ -131,37 +203,59 @@ const UploadPhotoModal = ({ isOpen, onClose }: UploadPhotoModalProps) => {
 
             <FormControl>
               <FormLabel>Tags</FormLabel>
-              <Select
-                placeholder="Select tags"
-                value=""
-                onChange={(e) => {
-                  const value = e.target.value;
-                  if (value && !selectedTags.includes(value)) {
-                    setSelectedTags([...selectedTags, value]);
-                  }
-                }}
-              >
-                <option value="family">Family</option>
-                <option value="vacation">Vacation</option>
-                <option value="birthday">Birthday</option>
-                <option value="holiday">Holiday</option>
-              </Select>
+              <Input
+                ref={tagInputRef}
+                value={tagInputValue}
+                onChange={handleTagInputChange}
+                onKeyDown={handleTagInputKeyDown}
+                placeholder="Add tags (e.g., family, wildlife, other) or type new ones"
+              />
               {selectedTags.length > 0 && (
-                <Box mt={2}>
+                <Flex wrap="wrap" mt={2} maxW="100%">
                   {selectedTags.map((tag) => (
-                    <Button
+                    <Tag
                       key={tag}
-                      size="sm"
+                      size="md"
+                      borderRadius="full"
+                      variant="solid"
+                      colorScheme="blue"
                       mr={2}
                       mb={2}
-                      onClick={() => setSelectedTags(selectedTags.filter(t => t !== tag))}
                     >
-                      {tag} ×
-                    </Button>
+                      <TagLabel>{tag}</TagLabel>
+                      <TagCloseButton onClick={() => handleRemoveTag(tag)} />
+                    </Tag>
                   ))}
+                </Flex>
+              )}
+              {suggestedTags.length > 0 && tagInputValue.length > 0 && (
+                <Box mt={2}>
+                  <Text fontSize="sm" color="gray.500" mb={1}>Suggestions:</Text>
+                  <Flex wrap="wrap">
+                    {suggestedTags.map((tag) => (
+                      <Button
+                        key={tag}
+                        size="sm"
+                        variant="outline"
+                        mr={2}
+                        mb={2}
+                        onClick={() => handleAddTag(tag)}
+                      >
+                        {tag}
+                      </Button>
+                    ))}
+                  </Flex>
                 </Box>
               )}
             </FormControl>
+
+            {locationData && (
+              <Box w="100%">
+                <Text fontSize="sm" color="gray.600" textAlign="center">
+                  {locationData}
+                </Text>
+              </Box>
+            )}
 
             <Button
               colorScheme="blue"

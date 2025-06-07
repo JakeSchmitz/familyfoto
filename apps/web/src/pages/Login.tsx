@@ -48,8 +48,8 @@ const Login = ({ setIsLoggedIn }: LoginProps) => {
       }}
     >
       {/* Main Content */}
-      <Flex flex="1" align="center" justify="center" zIndex={1}>
-        <VStack spacing={8} align="center" justify="center" w="100%">
+      <Flex flex="1" align="flex-start" justify="center" pt="10vh" zIndex={1}>
+        <VStack spacing={8} align="center" justify="center" w="100%" maxW="container.sm">
           <Heading size="2xl" textAlign="center" color="white">
             Welcome to FamilyFoto
           </Heading>
