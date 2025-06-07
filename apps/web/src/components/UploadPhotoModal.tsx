@@ -25,11 +25,12 @@ import ExifReader from 'exifreader';
 interface UploadPhotoModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onUploadSuccess: () => void;
 }
 
 const defaultTags = ["family", "wildlife", "other"];
 
-const UploadPhotoModal = ({ isOpen, onClose }: UploadPhotoModalProps) => {
+const UploadPhotoModal = ({ isOpen, onClose, onUploadSuccess }: UploadPhotoModalProps) => {
   const [description, setDescription] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [file, setFile] = useState<File | null>(null);
@@ -144,6 +145,7 @@ const UploadPhotoModal = ({ isOpen, onClose }: UploadPhotoModalProps) => {
         isClosable: true,
       });
       onClose();
+      onUploadSuccess();
     } catch (error) {
       console.error('Upload error:', error);
       toast({

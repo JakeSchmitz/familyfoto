@@ -35,7 +35,7 @@ const upload = multer({
     }
   },
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
+    fileSize: 20 * 1024 * 1024 // 20MB limit
   }
 });
 
@@ -52,8 +52,9 @@ async function savePhotoMetadata(
       originalName,
       description,
       tags: {
-        create: tags.map(tag => ({
-          name: tag
+        connectOrCreate: tags.map(tag => ({
+          where: { name: tag },
+          create: { name: tag }
         }))
       }
     }
