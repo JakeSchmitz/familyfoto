@@ -40,19 +40,82 @@ const UploadPhotoModal = ({ isOpen, onClose, onUploadSuccess }: UploadPhotoModal
   const tagInputRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
 
+  const getCityFromCoordinates = async (latitude: number, longitude: number): Promise<string | null> => {
+    try {
+      console.log('Getting city for coordinates:', { latitude, longitude });
+      
+      // Add a small delay to respect rate limiting (max 1 request per second)
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10&addressdetails=1`;
+      console.log('Fetching from URL:', url);
+
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'FamilyFoto/1.0'
+        }
+      });
+      
+      if (!response.ok) {
+        if (response.status === 429) {
+          console.warn('Rate limit exceeded for Nominatim API');
+          return null;
+        }
+        throw new Error(`Geocoding request failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Geocoding response:', data);
+
+      if (data.address) {
+        // Try to get the most specific location name available
+        const cityName = data.address.city || data.address.town || data.address.village || data.address.county || null;
+        console.log('Found city name:', cityName);
+        return cityName;
+      }
+      console.log('No address found in response');
+      return null;
+    } catch (error) {
+      console.error('Error getting city from coordinates:', error);
+      return null;
+    }
+  };
+
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
       const droppedFile = acceptedFiles[0];
+      console.log('Processing file:', droppedFile.name);
       setFile(droppedFile);
       setLocationData(null); // Clear previous location
 
       try {
-        const tags = await ExifReader.load(droppedFile, { expanded: true }); // Read EXIF data
+        console.log('Loading EXIF data...');
+        const tags = await ExifReader.load(droppedFile, { expanded: true });
+        console.log('EXIF data:', tags);
+
         if (tags.gps && tags.gps.Latitude && tags.gps.Longitude) {
-          const latitude = tags.gps.Latitude;
-          const longitude = tags.gps.Longitude;
-          setLocationData(`Location: ${latitude}, ${longitude}`);
+          console.log('Found GPS data:', {
+            latitude: tags.gps.Latitude,
+            longitude: tags.gps.Longitude
+          });
+
+          // Get city name from coordinates
+          const cityName = await getCityFromCoordinates(tags.gps.Latitude, tags.gps.Longitude);
+          
+          if (cityName) {
+            // Add location as a tag
+            const locationTag = `location:${cityName.toLowerCase()}`;
+            console.log('Adding location tag:', locationTag);
+            if (!selectedTags.includes(locationTag)) {
+              setSelectedTags(prev => [...prev, locationTag]);
+            }
+            setLocationData(`Location: ${cityName} (${tags.gps.Latitude}, ${tags.gps.Longitude})`);
+          } else {
+            console.log('No city name found for coordinates');
+            setLocationData(`Location: ${tags.gps.Latitude}, ${tags.gps.Longitude}`);
+          }
         } else {
+          console.log('No GPS data found in EXIF');
           setLocationData('Location: Not available');
         }
       } catch (error) {
@@ -60,7 +123,7 @@ const UploadPhotoModal = ({ isOpen, onClose, onUploadSuccess }: UploadPhotoModal
         setLocationData('Location: Error reading data');
       }
     }
-  }, []);
+  }, [selectedTags]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
