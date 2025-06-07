@@ -59,7 +59,8 @@ router.get('/', async (req: Request, res: Response) => {
       url: `/api/photos/${photo.filename}`,
       name: photo.originalName,
       description: photo.description || '',
-      tags: photo.tags.map(tag => tag.name)
+      tags: photo.tags.map(tag => tag.name),
+      timestamp: photo.createdAt.toISOString()
     }));
     
     res.json(formattedPhotos);

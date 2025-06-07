@@ -8,6 +8,7 @@ interface Photo {
   name: string;
   description: string;
   tags: string[];
+  timestamp: string;
 }
 
 interface HomeProps {
@@ -110,7 +111,8 @@ const Home = ({ selectedFilterTags }: HomeProps) => {
         photo={selectedPhoto ? {
           url: `${API_URL}${selectedPhoto.url}`,
           description: selectedPhoto.description,
-          tags: selectedPhoto.tags
+          tags: selectedPhoto.tags,
+          timestamp: selectedPhoto.timestamp
         } : null}
       />
     </Flex>

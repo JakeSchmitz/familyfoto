@@ -1,6 +1,6 @@
 import { ChakraProvider } from '@chakra-ui/react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Login from './pages/Login';
 import Home from './pages/Home';
 import Layout from './components/Layout';
@@ -23,14 +23,18 @@ const ProtectedRoute = ({ children, isLoggedIn, handleLogout, onPhotoUploadSucce
 };
 
 function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    // Initialize isLoggedIn from localStorage
+    const storedIsLoggedIn = localStorage.getItem('isLoggedIn');
+    return storedIsLoggedIn === 'true';
+  });
   const [homeKey, setHomeKey] = useState(0);
   const [selectedFilterTags, setSelectedFilterTags] = useState<string[]>([]);
   const [tagsRefreshKey, setTagsRefreshKey] = useState(0);
 
   const handleLogout = () => {
+    localStorage.removeItem('isLoggedIn'); // Clear login state from localStorage
     setIsLoggedIn(false);
-    // In a real app, you would also clear tokens from local storage, etc.
     // navigate('/login'); // Navigation is handled by ProtectedRoute now
   };
 

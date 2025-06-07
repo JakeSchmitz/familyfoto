@@ -1,31 +1,29 @@
 import { Box, Button, Flex, Heading, Text, VStack } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import { Dispatch, SetStateAction } from 'react';
+import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 
 interface LoginProps {
   setIsLoggedIn: Dispatch<SetStateAction<boolean>>;
 }
 
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
 const Login = ({ setIsLoggedIn }: LoginProps) => {
   const navigate = useNavigate();
 
-  const handleMockLogin = async () => {
-    try {
-      // Mock successful login response
-      const mockResponse = {
-        credential: 'mock-credential-token',
-        clientId: 'mock-client-id',
-        select_by: 'user'
-      };
-      
-      console.log('Mock login successful:', mockResponse);
-      setIsLoggedIn(true); // Set logged in status to true
-      // TODO: Replace with actual backend call when ready
-      // For now, just navigate to home
-      navigate('/');
-    } catch (error) {
-      console.error('Login failed:', error);
-    }
+  const handleGoogleLoginSuccess = async (credentialResponse: any) => {
+    console.log('Google login successful:', credentialResponse);
+    // TODO: Send credentialResponse.credential to your backend for verification
+    // For now, directly set isLoggedIn to true and navigate
+    localStorage.setItem('isLoggedIn', 'true');
+    setIsLoggedIn(true);
+    navigate('/');
+  };
+
+  const handleGoogleLoginError = () => {
+    console.error('Google login failed');
+    // Display an error message to the user
   };
 
   return (
@@ -64,15 +62,16 @@ const Login = ({ setIsLoggedIn }: LoginProps) => {
           >
             <VStack spacing={6}>
               <Heading size="md" textAlign="center">Sign in to continue</Heading>
-              <Button
-                colorScheme="blue"
-                onClick={handleMockLogin}
-                size="lg"
-                w="100%"
-                leftIcon={<Box as="span" className="google-icon">G</Box>}
-              >
-                Sign in with Google (Mock)
-              </Button>
+              <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+                <GoogleLogin
+                  onSuccess={handleGoogleLoginSuccess}
+                  onError={handleGoogleLoginError}
+                  type="standard"
+                  theme="outline"
+                  size="large"
+                  width="480"
+                />
+              </GoogleOAuthProvider>
             </VStack>
           </Box>
         </VStack>

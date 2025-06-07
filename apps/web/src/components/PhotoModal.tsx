@@ -20,6 +20,7 @@ interface PhotoModalProps {
     url: string;
     description: string;
     tags: string[];
+    timestamp: string;
   } | null;
 }
 
@@ -56,7 +57,7 @@ const PhotoModal = ({ isOpen, onClose, photo }: PhotoModalProps) => {
               </Text>
             )}
             {photo.tags && photo.tags.length > 0 && (
-              <HStack spacing={2}>
+              <HStack spacing={2} mb={2}>
                 {photo.tags.map((tag) => (
                   <Tag key={tag} size="sm" variant="solid" colorScheme="blue">
                     <TagLabel>{tag}</TagLabel>
@@ -64,6 +65,9 @@ const PhotoModal = ({ isOpen, onClose, photo }: PhotoModalProps) => {
                 ))}
               </HStack>
             )}
+            <Text fontSize="sm" color="gray.300">
+              Uploaded: {new Date(photo.timestamp).toLocaleString()}
+            </Text>
           </Box>
         </ModalBody>
       </ModalContent>

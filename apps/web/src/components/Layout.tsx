@@ -9,11 +9,12 @@ interface LayoutProps {
   onPhotoUploadSuccess: () => void;
   selectedFilterTags: string[];
   onFilterTagsChange: (tags: string[]) => void;
+  tagsRefreshKey: number;
 }
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-const Layout = ({ children, handleLogout, onPhotoUploadSuccess, selectedFilterTags, onFilterTagsChange }: LayoutProps) => {
+const Layout = ({ children, handleLogout, onPhotoUploadSuccess, selectedFilterTags, onFilterTagsChange, tagsRefreshKey }: LayoutProps) => {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [loadingTags, setLoadingTags] = useState(true);
@@ -38,7 +39,7 @@ const Layout = ({ children, handleLogout, onPhotoUploadSuccess, selectedFilterTa
       }
     };
     fetchTags();
-  }, []);
+  }, [tagsRefreshKey]);
 
   const handleTagCheckboxChange = (tag: string) => {
     if (selectedFilterTags.includes(tag)) {
