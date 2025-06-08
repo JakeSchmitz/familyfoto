@@ -19,6 +19,7 @@ import {
   ListItem,
 } from '@chakra-ui/react';
 import { useState, useRef, useEffect } from 'react';
+import { API_ENDPOINTS } from '../config/api';
 
 interface PhotoModalProps {
   isOpen: boolean;
@@ -43,7 +44,7 @@ const PhotoModal = ({ isOpen, onClose, photo, onPhotoUpdate }: PhotoModalProps) 
 
   const fetchTags = async () => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/photos/tags`);
+      const response = await fetch(API_ENDPOINTS.PHOTOS.TAGS);
       if (!response.ok) {
         throw new Error('Failed to fetch tags');
       }
@@ -75,7 +76,7 @@ const PhotoModal = ({ isOpen, onClose, photo, onPhotoUpdate }: PhotoModalProps) 
 
     setIsUpdating(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/photos/${photo.id}/tags`, {
+      const response = await fetch(`${API_ENDPOINTS.PHOTOS.BASE}/${photo.id}/tags`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -116,7 +117,7 @@ const PhotoModal = ({ isOpen, onClose, photo, onPhotoUpdate }: PhotoModalProps) 
   const handleRemoveTag = async (tagToRemove: string) => {
     setIsUpdating(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/photos/${photo.id}/tags`, {
+      const response = await fetch(`${API_ENDPOINTS.PHOTOS.BASE}/${photo.id}/tags`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

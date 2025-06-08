@@ -21,6 +21,7 @@ import {
 import { useCallback, useState, useRef, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import ExifReader from 'exifreader';
+import { API_ENDPOINTS } from '../config/api';
 
 interface UploadPhotoModalProps {
   isOpen: boolean;
@@ -190,7 +191,7 @@ const UploadPhotoModal = ({ isOpen, onClose, onUploadSuccess }: UploadPhotoModal
     }
 
     try {
-      const response = await fetch('http://localhost:3000/api/upload', {
+      const response = await fetch(API_ENDPOINTS.PHOTOS.UPLOAD, {
         method: 'POST',
         body: formData,
       });

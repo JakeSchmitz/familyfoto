@@ -7,7 +7,6 @@ import fs from 'fs';
 const prisma = new PrismaClient();
 const router = Router();
 
-const PHOTO_UPLOAD_TARGET = process.env.PHOTO_UPLOAD_TARGET || 'gcs'; // Default to gcs
 const PHOTOS_DIR = process.env.PHOTOS_DIR || path.join(__dirname, '../../uploads');
 
 // Define a type for the photo object with tags included and optional gcsUrl
@@ -37,88 +36,162 @@ router.get('/tags', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/', async (req: Request, res: Response) => {
+// Get all photos with their tags and user information
+router.get('/', async (req, res) => {
   try {
-    const { tags } = req.query;
-    let photos: PhotoWithTags[]; // Explicitly type photos here
-    
-    if (tags && typeof tags === 'string') {
-      const tagNames = tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
-      photos = await prisma.photo.findMany({
-        where: {
-          tags: {
-            some: {
-              name: {
-                in: tagNames
-              }
-            }
+    const photos = await prisma.photo.findMany({
+      include: {
+        tags: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
           }
-        },
-        select: {
-          id: true,
-          filename: true,
-          originalName: true,
-          description: true,
-          gcsUrl: true, // Explicitly include gcsUrl
-          createdAt: true,
-          updatedAt: true,
-          tags: { // Explicitly select tags as well
-            select: { id: true, name: true }
-          }
-        },
-        orderBy: { createdAt: 'desc' },
-      });
-    } else {
-      photos = await prisma.photo.findMany({
-        select: {
-          id: true,
-          filename: true,
-          originalName: true,
-          description: true,
-          gcsUrl: true, // Explicitly include gcsUrl
-          createdAt: true,
-          updatedAt: true,
-          tags: { // Explicitly select tags as well
-            select: { id: true, name: true }
-          }
-        },
-        orderBy: { createdAt: 'desc' },
-      });
-    }
-
-    const photosWithUrls = photos.map(photo => ({
-      id: photo.id,
-      filename: photo.filename,
-      originalName: photo.originalName,
-      description: photo.description,
-      url: photo.gcsUrl && PHOTO_UPLOAD_TARGET !== 'local'
-            ? photo.gcsUrl
-            : `/api/photos/${photo.filename}`,
-      tags: photo.tags.map(tag => tag.name),
-      timestamp: photo.createdAt.toISOString(),
-    }));
-
-    res.json(photosWithUrls);
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+    res.json(photos);
   } catch (error) {
     console.error('Error fetching photos:', error);
-    res.status(500).json({ error: 'Failed to fetch photos' });
+    res.status(500).json({ error: 'Error fetching photos' });
   }
 });
 
-// Route to serve local photos if PHOTO_UPLOAD_TARGET is local and gcsUrl is not present
-router.get('/:filename', async (req, res) => {
-  if (PHOTO_UPLOAD_TARGET === 'local') {
-    const filename = req.params.filename;
-    const filePath = path.join(PHOTOS_DIR, filename);
+// Get photos by user ID
+router.get('/user/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const photos = await prisma.photo.findMany({
+      where: {
+        userId: parseInt(userId)
+      },
+      include: {
+        tags: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+    res.json(photos);
+  } catch (error) {
+    console.error('Error fetching user photos:', error);
+    res.status(500).json({ error: 'Error fetching user photos' });
+  }
+});
 
-    // Check if the file exists before sending
-    if (fs.existsSync(filePath)) {
-      res.sendFile(filePath);
-    } else {
-      res.status(404).json({ error: 'Photo not found' });
+// Get a single photo by ID with its tags and user information
+router.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const photo = await prisma.photo.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        tags: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    if (!photo) {
+      return res.status(404).json({ error: 'Photo not found' });
     }
+
+    res.json(photo);
+  } catch (error) {
+    console.error('Error fetching photo:', error);
+    res.status(500).json({ error: 'Error fetching photo' });
+  }
+});
+
+// Serve local photos if gcsUrl is not present
+router.get('/:filename', async (req, res) => {
+  const filename = req.params.filename;
+  const filePath = path.join(PHOTOS_DIR, filename);
+
+  // Check if the file exists before sending
+  if (fs.existsSync(filePath)) {
+    res.sendFile(filePath);
   } else {
-    res.status(400).json({ error: 'Local photo serving is not enabled.' });
+    res.status(404).json({ error: 'Photo not found' });
+  }
+});
+
+// Add tag to photo
+router.post('/:photoId/tags', async (req: Request, res: Response) => {
+  try {
+    const { photoId } = req.params;
+    const { tag } = req.body;
+
+    if (!tag || typeof tag !== 'string') {
+      return res.status(400).json({ error: 'Invalid tag' });
+    }
+
+    const photo = await prisma.photo.update({
+      where: { id: parseInt(photoId) },
+      data: {
+        tags: {
+          connectOrCreate: {
+            where: { name: tag },
+            create: { name: tag }
+          }
+        }
+      },
+      include: {
+        tags: true
+      }
+    });
+
+    res.json({ tags: photo.tags.map(t => t.name) });
+  } catch (error) {
+    console.error('Error adding tag:', error);
+    res.status(500).json({ error: 'Failed to add tag' });
+  }
+});
+
+// Remove tag from photo
+router.delete('/:photoId/tags', async (req: Request, res: Response) => {
+  try {
+    const { photoId } = req.params;
+    const { tag } = req.body;
+
+    if (!tag || typeof tag !== 'string') {
+      return res.status(400).json({ error: 'Invalid tag' });
+    }
+
+    const photo = await prisma.photo.update({
+      where: { id: parseInt(photoId) },
+      data: {
+        tags: {
+          disconnect: {
+            name: tag
+          }
+        }
+      },
+      include: {
+        tags: true
+      }
+    });
+
+    res.json({ tags: photo.tags.map(t => t.name) });
+  } catch (error) {
+    console.error('Error removing tag:', error);
+    res.status(500).json({ error: 'Failed to remove tag' });
   }
 });
 

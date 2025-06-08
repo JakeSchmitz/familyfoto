@@ -1,6 +1,7 @@
 import { Box, Flex, Heading, Text, VStack, SimpleGrid, Image, Spinner, Center } from '@chakra-ui/react';
 import { useState, useEffect } from 'react';
 import PhotoModal from '../components/PhotoModal';
+import { API_ENDPOINTS } from '../config/api';
 
 interface Photo {
   id: string;
@@ -33,7 +34,7 @@ const Home = ({ selectedFilterTags }: HomeProps) => {
         selectedFilterTags.forEach(tag => queryParams.append('tags', tag));
       }
 
-      const response = await fetch(`${API_URL}/api/photos?${queryParams.toString()}`);
+      const response = await fetch(`${API_ENDPOINTS.PHOTOS.BASE}?${queryParams.toString()}`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
