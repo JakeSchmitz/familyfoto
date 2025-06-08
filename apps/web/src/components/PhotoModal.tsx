@@ -10,22 +10,156 @@ import {
   Flex,
   Tag,
   TagLabel,
+  TagCloseButton,
   HStack,
+  Input,
+  Button,
+  useToast,
+  List,
+  ListItem,
 } from '@chakra-ui/react';
+import { useState, useRef, useEffect } from 'react';
 
 interface PhotoModalProps {
   isOpen: boolean;
   onClose: () => void;
   photo: {
+    id: string;
     url: string;
     description: string;
     tags: string[];
     timestamp: string;
   } | null;
+  onPhotoUpdate: () => void;
 }
 
-const PhotoModal = ({ isOpen, onClose, photo }: PhotoModalProps) => {
+const PhotoModal = ({ isOpen, onClose, photo, onPhotoUpdate }: PhotoModalProps) => {
+  const [newTag, setNewTag] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const tagInputRef = useRef<HTMLInputElement>(null);
+  const toast = useToast();
+
+  const fetchTags = async () => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/photos/tags`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch tags');
+      }
+      const data: string[] = await response.json();
+      setAvailableTags(data);
+    } catch (error) {
+      console.error('Error fetching tags:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchTags();
+    }
+  }, [isOpen]);
+
   if (!photo) return null;
+
+  const filteredSuggestions = availableTags.filter(
+    tag => tag.toLowerCase().includes(newTag.toLowerCase()) && !photo.tags.includes(tag)
+  );
+
+  const handleAddTag = async (tagToAdd: string = newTag) => {
+    const tag = tagToAdd.trim().toLowerCase();
+    if (!tag || photo.tags.includes(tag)) {
+      setNewTag('');
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/photos/${photo.id}/tags`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ tag }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to add tag');
+      }
+
+      const { tags } = await response.json();
+      // Update the photo's tags immediately
+      photo.tags = tags;
+      // Refresh available tags
+      await fetchTags();
+      // Trigger parent update
+      onPhotoUpdate();
+      setNewTag('');
+      setShowSuggestions(false);
+      toast({
+        title: 'Tag added',
+        status: 'success',
+        duration: 2000,
+      });
+    } catch (error) {
+      console.error('Error adding tag:', error);
+      toast({
+        title: 'Error adding tag',
+        status: 'error',
+        duration: 2000,
+      });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleRemoveTag = async (tagToRemove: string) => {
+    setIsUpdating(true);
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/photos/${photo.id}/tags`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ tag: tagToRemove }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to remove tag');
+      }
+
+      const { tags } = await response.json();
+      // Update the photo's tags immediately
+      photo.tags = tags;
+      // Refresh available tags
+      await fetchTags();
+      // Trigger parent update
+      onPhotoUpdate();
+      toast({
+        title: 'Tag removed',
+        status: 'success',
+        duration: 2000,
+      });
+    } catch (error) {
+      console.error('Error removing tag:', error);
+      toast({
+        title: 'Error removing tag',
+        status: 'error',
+        duration: 2000,
+      });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddTag();
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
+    }
+  };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="full">
@@ -56,15 +190,84 @@ const PhotoModal = ({ isOpen, onClose, photo }: PhotoModalProps) => {
                   {photo.description}
                 </Text>
               )}
-              {photo.tags && photo.tags.length > 0 && (
-                <HStack spacing={2} mb={2} wrap="wrap">
+              
+              <Box mb={4}>
+                <Text fontSize="sm" mb={2}>Tags</Text>
+                <Flex wrap="wrap" gap={2} mb={2}>
                   {photo.tags.map((tag) => (
-                    <Tag key={tag} size="sm" variant="solid" colorScheme="blue">
+                    <Tag
+                      key={tag}
+                      size="sm"
+                      variant="solid"
+                      colorScheme="blue"
+                    >
                       <TagLabel>{tag}</TagLabel>
+                      <TagCloseButton
+                        onClick={() => handleRemoveTag(tag)}
+                        isDisabled={isUpdating}
+                      />
                     </Tag>
                   ))}
-                </HStack>
-              )}
+                </Flex>
+                <Box position="relative">
+                  <Flex gap={2}>
+                    <Input
+                      ref={tagInputRef}
+                      value={newTag}
+                      onChange={(e) => {
+                        setNewTag(e.target.value);
+                        setShowSuggestions(true);
+                      }}
+                      onKeyDown={handleKeyDown}
+                      onFocus={() => setShowSuggestions(true)}
+                      placeholder="Add new tag"
+                      size="sm"
+                      bg="white"
+                      color="black"
+                      _placeholder={{ color: 'gray.500' }}
+                      isDisabled={isUpdating}
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => handleAddTag()}
+                      isLoading={isUpdating}
+                      isDisabled={!newTag.trim() || isUpdating}
+                    >
+                      Add
+                    </Button>
+                  </Flex>
+                  {showSuggestions && filteredSuggestions.length > 0 && (
+                    <List
+                      position="absolute"
+                      top="100%"
+                      left={0}
+                      right={0}
+                      bg="white"
+                      color="black"
+                      borderRadius="md"
+                      boxShadow="md"
+                      zIndex={1000}
+                      maxH="200px"
+                      overflowY="auto"
+                      mt={1}
+                    >
+                      {filteredSuggestions.map((tag) => (
+                        <ListItem
+                          key={tag}
+                          px={3}
+                          py={2}
+                          cursor="pointer"
+                          _hover={{ bg: 'gray.100' }}
+                          onClick={() => handleAddTag(tag)}
+                        >
+                          {tag}
+                        </ListItem>
+                      ))}
+                    </List>
+                  )}
+                </Box>
+              </Box>
+
               <Text fontSize="sm" color="gray.300">
                 Uploaded: {new Date(photo.timestamp).toLocaleString()}
               </Text>

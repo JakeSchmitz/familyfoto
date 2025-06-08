@@ -23,31 +23,39 @@ const Home = ({ selectedFilterTags }: HomeProps) => {
   const [error, setError] = useState<string | null>(null);
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
 
-  useEffect(() => {
-    const fetchPhotos = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        const queryParams = new URLSearchParams();
-        if (selectedFilterTags.length > 0) {
-          selectedFilterTags.forEach(tag => queryParams.append('tags', tag));
-        }
-
-        const response = await fetch(`${API_URL}/api/photos?${queryParams.toString()}`);
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data: Photo[] = await response.json();
-        setPhotos(data);
-      } catch (e: any) {
-        setError(`Failed to fetch photos: ${e.message}`);
-        console.error("Error fetching photos:", e);
-      } finally {
-        setLoading(false);
+  const fetchPhotos = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const queryParams = new URLSearchParams();
+      if (selectedFilterTags.length > 0) {
+        selectedFilterTags.forEach(tag => queryParams.append('tags', tag));
       }
-    };
 
+      const response = await fetch(`${API_URL}/api/photos?${queryParams.toString()}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data: Photo[] = await response.json();
+      setPhotos(data);
+      
+      // Update selected photo if it exists
+      if (selectedPhoto) {
+        const updatedPhoto = data.find(p => p.id === selectedPhoto.id);
+        if (updatedPhoto) {
+          setSelectedPhoto(updatedPhoto);
+        }
+      }
+    } catch (e: any) {
+      setError(`Failed to fetch photos: ${e.message}`);
+      console.error("Error fetching photos:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchPhotos();
   }, [selectedFilterTags]);
 
@@ -109,11 +117,13 @@ const Home = ({ selectedFilterTags }: HomeProps) => {
         isOpen={!!selectedPhoto}
         onClose={() => setSelectedPhoto(null)}
         photo={selectedPhoto ? {
+          id: selectedPhoto.id,
           url: `${API_URL}${selectedPhoto.url}`,
           description: selectedPhoto.description,
           tags: selectedPhoto.tags,
           timestamp: selectedPhoto.timestamp
         } : null}
+        onPhotoUpdate={fetchPhotos}
       />
     </Flex>
   );
