@@ -1,282 +1,150 @@
+import React, { useState } from 'react';
 import {
   Modal,
   ModalOverlay,
   ModalContent,
+  ModalHeader,
   ModalBody,
   ModalCloseButton,
   Image,
-  Box,
   Text,
-  Flex,
+  Box,
   Tag,
   TagLabel,
-  TagCloseButton,
   HStack,
-  Input,
-  Button,
+  VStack,
+  IconButton,
   useToast,
-  List,
-  ListItem,
 } from '@chakra-ui/react';
-import { useState, useRef, useEffect } from 'react';
+import { DeleteIcon } from '@chakra-ui/icons';
+import { Photo } from '../types';
 import { API_ENDPOINTS } from '../config/api';
+import DeleteConfirmationModal from './DeleteConfirmationModal';
 
 interface PhotoModalProps {
-  isOpen: boolean;
+  photo: Photo;
   onClose: () => void;
-  photo: {
-    id: string;
-    url: string;
-    description: string;
-    tags: string[];
-    timestamp: string;
-  } | null;
-  onPhotoUpdate: () => void;
+  currentUserId?: number;
+  onDelete?: () => void;
 }
 
-const PhotoModal = ({ isOpen, onClose, photo, onPhotoUpdate }: PhotoModalProps) => {
-  const [newTag, setNewTag] = useState('');
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [availableTags, setAvailableTags] = useState<string[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const tagInputRef = useRef<HTMLInputElement>(null);
+const PhotoModal: React.FC<PhotoModalProps> = ({ photo, onClose, currentUserId, onDelete }) => {
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const toast = useToast();
+  const imageUrl = photo.gcsUrl || `${API_ENDPOINTS.PHOTOS.BASE}/file/${photo.filename}`;
+  const isOwner = currentUserId === photo.user.id;
 
-  const fetchTags = async () => {
-    try {
-      const response = await fetch(API_ENDPOINTS.PHOTOS.TAGS);
-      if (!response.ok) {
-        throw new Error('Failed to fetch tags');
-      }
-      const data: string[] = await response.json();
-      setAvailableTags(data);
-    } catch (error) {
-      console.error('Error fetching tags:', error);
-    }
+  console.log('PhotoModal user comparison:', {
+    currentUserId,
+    photoUserId: photo.user.id,
+    isOwner,
+    photoId: photo.id,
+    photoName: photo.originalName
+  });
+
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsDeleteModalOpen(true);
   };
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchTags();
-    }
-  }, [isOpen]);
-
-  if (!photo) return null;
-
-  const filteredSuggestions = availableTags.filter(
-    tag => tag.toLowerCase().includes(newTag.toLowerCase()) && !photo.tags.includes(tag)
-  );
-
-  const handleAddTag = async (tagToAdd: string = newTag) => {
-    const tag = tagToAdd.trim().toLowerCase();
-    if (!tag || photo.tags.includes(tag)) {
-      setNewTag('');
-      return;
-    }
-
-    setIsUpdating(true);
+  const handleDeleteConfirm = async () => {
+    setIsDeleting(true);
     try {
-      const response = await fetch(`${API_ENDPOINTS.PHOTOS.BASE}/${photo.id}/tags`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ tag }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to add tag');
-      }
-
-      const { tags } = await response.json();
-      // Update the photo's tags immediately
-      photo.tags = tags;
-      // Refresh available tags
-      await fetchTags();
-      // Trigger parent update
-      onPhotoUpdate();
-      setNewTag('');
-      setShowSuggestions(false);
-      toast({
-        title: 'Tag added',
-        status: 'success',
-        duration: 2000,
-      });
-    } catch (error) {
-      console.error('Error adding tag:', error);
-      toast({
-        title: 'Error adding tag',
-        status: 'error',
-        duration: 2000,
-      });
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  const handleRemoveTag = async (tagToRemove: string) => {
-    setIsUpdating(true);
-    try {
-      const response = await fetch(`${API_ENDPOINTS.PHOTOS.BASE}/${photo.id}/tags`, {
+      const response = await fetch(`${API_ENDPOINTS.PHOTOS.BASE}/${photo.id}`, {
         method: 'DELETE',
         headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ tag: tagToRemove }),
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
       });
 
       if (!response.ok) {
-        throw new Error('Failed to remove tag');
+        throw new Error('Failed to delete photo');
       }
 
-      const { tags } = await response.json();
-      // Update the photo's tags immediately
-      photo.tags = tags;
-      // Refresh available tags
-      await fetchTags();
-      // Trigger parent update
-      onPhotoUpdate();
       toast({
-        title: 'Tag removed',
+        title: 'Photo deleted',
         status: 'success',
-        duration: 2000,
+        duration: 3000,
       });
+
+      onDelete?.();
+      onClose();
     } catch (error) {
-      console.error('Error removing tag:', error);
+      console.error('Error deleting photo:', error);
       toast({
-        title: 'Error removing tag',
+        title: 'Error deleting photo',
         status: 'error',
-        duration: 2000,
+        duration: 3000,
       });
     } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleAddTag();
-    } else if (e.key === 'Escape') {
-      setShowSuggestions(false);
+      setIsDeleting(false);
+      setIsDeleteModalOpen(false);
     }
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="full">
-      <ModalOverlay />
-      <ModalContent bg="black" maxW="100vw" maxH="100vh" m={0}>
-        <ModalCloseButton color="white" zIndex={1000} />
-        <ModalBody p={0} display="flex" flexDirection="column">
-          <Flex flex="1" position="relative" alignItems="center" justifyContent="center" gap={4}>
-            <Box flex="1" display="flex" alignItems="center" justifyContent="center">
+    <>
+      <Modal isOpen={true} onClose={onClose} size="xl">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader display="flex" alignItems="center" justifyContent="space-between">
+            <Text>{photo.originalName}</Text>
+            {isOwner && (
+              <IconButton
+                aria-label="Delete photo"
+                icon={<DeleteIcon />}
+                colorScheme="red"
+                size="sm"
+                onClick={handleDeleteClick}
+              />
+            )}
+          </ModalHeader>
+          <ModalCloseButton />
+          <ModalBody pb={6}>
+            <VStack spacing={4} align="stretch">
               <Image
-                src={photo.url}
-                alt={photo.description || 'Photo'}
-                maxH="calc(100vh - 40px)"
-                maxW="100%"
+                src={imageUrl}
+                alt={photo.originalName}
+                borderRadius="md"
+                maxH="70vh"
                 objectFit="contain"
               />
-            </Box>
-            <Box
-              w="300px"
-              p={4}
-              color="white"
-              bg="rgba(0, 0, 0, 0.5)"
-              borderRadius="md"
-              m={4}
-            >
               {photo.description && (
-                <Text fontSize="lg" mb={2}>
-                  {photo.description}
-                </Text>
+                <Text fontSize="md">{photo.description}</Text>
               )}
-              
-              <Box mb={4}>
-                <Text fontSize="sm" mb={2}>Tags</Text>
-                <Flex wrap="wrap" gap={2} mb={2}>
-                  {photo.tags.map((tag) => (
-                    <Tag
-                      key={tag}
-                      size="sm"
-                      variant="solid"
-                      colorScheme="blue"
-                    >
-                      <TagLabel>{tag}</TagLabel>
-                      <TagCloseButton
-                        onClick={() => handleRemoveTag(tag)}
-                        isDisabled={isUpdating}
-                      />
-                    </Tag>
-                  ))}
-                </Flex>
-                <Box position="relative">
-                  <Flex gap={2}>
-                    <Input
-                      ref={tagInputRef}
-                      value={newTag}
-                      onChange={(e) => {
-                        setNewTag(e.target.value);
-                        setShowSuggestions(true);
-                      }}
-                      onKeyDown={handleKeyDown}
-                      onFocus={() => setShowSuggestions(true)}
-                      placeholder="Add new tag"
-                      size="sm"
-                      bg="white"
-                      color="black"
-                      _placeholder={{ color: 'gray.500' }}
-                      isDisabled={isUpdating}
-                    />
-                    <Button
-                      size="sm"
-                      onClick={() => handleAddTag()}
-                      isLoading={isUpdating}
-                      isDisabled={!newTag.trim() || isUpdating}
-                    >
-                      Add
-                    </Button>
-                  </Flex>
-                  {showSuggestions && filteredSuggestions.length > 0 && (
-                    <List
-                      position="absolute"
-                      top="100%"
-                      left={0}
-                      right={0}
-                      bg="white"
-                      color="black"
-                      borderRadius="md"
-                      boxShadow="md"
-                      zIndex={1000}
-                      maxH="200px"
-                      overflowY="auto"
-                      mt={1}
-                    >
-                      {filteredSuggestions.map((tag) => (
-                        <ListItem
-                          key={tag}
-                          px={3}
-                          py={2}
-                          cursor="pointer"
-                          _hover={{ bg: 'gray.100' }}
-                          onClick={() => handleAddTag(tag)}
-                        >
-                          {tag}
-                        </ListItem>
-                      ))}
-                    </List>
-                  )}
+              {photo.tags && photo.tags.length > 0 && (
+                <Box>
+                  <Text fontSize="sm" fontWeight="bold" mb={2}>
+                    Tags:
+                  </Text>
+                  <HStack spacing={2} wrap="wrap">
+                    {photo.tags.map((tag) => (
+                      <Tag key={tag.id} size="md" borderRadius="full" variant="solid" colorScheme="blue">
+                        <TagLabel>{tag.name}</TagLabel>
+                      </Tag>
+                    ))}
+                  </HStack>
                 </Box>
-              </Box>
-
-              <Text fontSize="sm" color="gray.300">
-                Uploaded: {new Date(photo.timestamp).toLocaleString()}
+              )}
+              <Text fontSize="sm" color="gray.500">
+                Uploaded by: {photo.user.name || photo.user.email}
               </Text>
-            </Box>
-          </Flex>
-        </ModalBody>
-      </ModalContent>
-    </Modal>
+              <Text fontSize="sm" color="gray.500">
+                Uploaded on: {new Date(photo.createdAt).toLocaleDateString()}
+              </Text>
+            </VStack>
+          </ModalBody>
+        </ModalContent>
+      </Modal>
+
+      <DeleteConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleDeleteConfirm}
+        isDeleting={isDeleting}
+      />
+    </>
   );
 };
 

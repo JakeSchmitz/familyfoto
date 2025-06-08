@@ -35,11 +35,21 @@ const UploadPhotoModal = ({ isOpen, onClose, onUploadSuccess }: UploadPhotoModal
   const [description, setDescription] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [locationData, setLocationData] = useState<string | null>(null);
   const [tagInputValue, setTagInputValue] = useState('');
   const tagInputRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
+
+  // Cleanup preview URL when component unmounts or file changes
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   const getCityFromCoordinates = async (latitude: number, longitude: number): Promise<string | null> => {
     try {
@@ -86,6 +96,15 @@ const UploadPhotoModal = ({ isOpen, onClose, onUploadSuccess }: UploadPhotoModal
     if (acceptedFiles.length > 0) {
       const droppedFile = acceptedFiles[0];
       console.log('Processing file:', droppedFile.name);
+      
+      // Cleanup previous preview URL
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+      
+      // Create new preview URL
+      const newPreviewUrl = URL.createObjectURL(droppedFile);
+      setPreviewUrl(newPreviewUrl);
       setFile(droppedFile);
       setLocationData(null); // Clear previous location
 
@@ -124,7 +143,7 @@ const UploadPhotoModal = ({ isOpen, onClose, onUploadSuccess }: UploadPhotoModal
         setLocationData('Location: Error reading data');
       }
     }
-  }, [selectedTags]);
+  }, [selectedTags, previewUrl]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -172,11 +191,15 @@ const UploadPhotoModal = ({ isOpen, onClose, onUploadSuccess }: UploadPhotoModal
       setDescription('');
       setSelectedTags([]);
       setFile(null);
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+        setPreviewUrl(null);
+      }
       setLocationData(null);
       setTagInputValue('');
       setIsUploading(false);
     }
-  }, [isOpen]);
+  }, [isOpen, previewUrl]);
 
   const handleSubmit = async () => {
     if (!file) return;
@@ -248,14 +271,24 @@ const UploadPhotoModal = ({ isOpen, onClose, onUploadSuccess }: UploadPhotoModal
               bg={isDragActive ? "blue.50" : "gray.50"}
               cursor="pointer"
               _hover={{ borderColor: "blue.400" }}
+              position="relative"
+              overflow="hidden"
             >
               <input {...getInputProps()} />
-              {file ? (
-                <Text>{file.name}</Text>
+              {file && previewUrl ? (
+                <img
+                  src={previewUrl}
+                  alt="Preview"
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover'
+                  }}
+                />
               ) : (
-                <Text>
+                <Text color="gray.500">
                   {isDragActive
-                    ? "Drop the photo here"
+                    ? "Drop the photo here..."
                     : "Drag and drop a photo here, or click to select"}
                 </Text>
               )}

@@ -23,7 +23,7 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
+    fileSize: 50 * 1024 * 1024, // 50MB limit
   },
 });
 
@@ -70,6 +70,9 @@ router.post('/', authenticateToken, upload.single('photo'), async (req, res) => 
     }
 
     const file = req.file;
+    const { description, tags } = req.body;
+    console.log('Upload request body:', { description, tags });
+
     const fileExtension = path.extname(file.originalname);
     const fileName = `${uuidv4()}${fileExtension}`;
     const filePath = path.join(UPLOADS_DIR, fileName);
@@ -108,9 +111,22 @@ router.post('/', authenticateToken, upload.single('photo'), async (req, res) => 
       });
       // Clean up local file after upload to GCS
       fs.unlinkSync(filePath);
-    } else {
-      // For local development, use the local file path
-      publicUrl = `/api/photos/${fileName}`;
+    }
+
+    // Parse tags if they exist
+    let tagArray: string[] = [];
+    if (tags) {
+      try {
+        tagArray = Array.isArray(tags) ? tags : JSON.parse(tags);
+      } catch (e) {
+        console.error('Error parsing tags:', e);
+        tagArray = [];
+      }
+    }
+
+    // Add location to tags if available
+    if (location && !tagArray.includes(location)) {
+      tagArray.push(location);
     }
 
     // Create photo record in database
@@ -118,18 +134,26 @@ router.post('/', authenticateToken, upload.single('photo'), async (req, res) => 
       data: {
         filename: fileName,
         originalName: file.originalname,
+        description: description || null,
         gcsUrl: publicUrl,
         userId: req.user.id,
         tags: {
-          create: location ? [{
-            name: location
-          }] : []
+          connectOrCreate: tagArray.map(tag => ({
+            where: { name: tag.trim().toLowerCase() },
+            create: { name: tag.trim().toLowerCase() }
+          }))
         }
       },
       include: {
         tags: true,
         user: true
       }
+    });
+
+    console.log('Created photo with tags:', {
+      photoId: photo.id,
+      description: photo.description,
+      tags: photo.tags.map(t => t.name)
     });
 
     res.json(photo);

@@ -3,6 +3,7 @@ import { User } from '../types';
 
 interface AuthContextType {
   user: User | null;
+  userId: number | undefined;
   login: (token: string, userData: User) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
@@ -29,6 +30,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.removeItem('user');
       localStorage.removeItem('token');
       localStorage.removeItem('isLoggedIn');
+      localStorage.removeItem('userId');
       return null;
     }
   });
@@ -61,12 +63,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (response.ok) {
           const userData = await response.json();
           setUser(userData);
+          localStorage.setItem('userId', userData.id.toString());
           setIsAuthenticated(true);
         } else {
           // Token is invalid or expired
           localStorage.removeItem('token');
           localStorage.removeItem('user');
           localStorage.removeItem('isLoggedIn');
+          localStorage.removeItem('userId');
           setUser(null);
           setIsAuthenticated(false);
         }
@@ -86,6 +90,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(userData));
       localStorage.setItem('isLoggedIn', 'true');
+      localStorage.setItem('userId', userData.id.toString());
       
       setUser(userData);
       setIsAuthenticated(true);
@@ -99,12 +104,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     localStorage.removeItem('isLoggedIn');
+    localStorage.removeItem('userId');
     setUser(null);
     setIsAuthenticated(false);
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      userId: user?.id, 
+      login, 
+      logout, 
+      isAuthenticated 
+    }}>
       {children}
     </AuthContext.Provider>
   );

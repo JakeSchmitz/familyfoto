@@ -25,15 +25,17 @@ const Layout = ({ children, handleLogout, onPhotoUploadSuccess, selectedFilterTa
       try {
         setLoadingTags(true);
         setTagsError(null);
+        console.log('Fetching tags from:', `${API_URL}/api/photos/tags`);
         const response = await fetch(`${API_URL}/api/photos/tags`);
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data: string[] = await response.json();
+        console.log('Received tags:', data);
         setAvailableTags(data);
       } catch (e: any) {
-        setTagsError(`Failed to fetch tags: ${e.message}`);
         console.error("Error fetching tags:", e);
+        setTagsError(`Failed to fetch tags: ${e.message}`);
       } finally {
         setLoadingTags(false);
       }

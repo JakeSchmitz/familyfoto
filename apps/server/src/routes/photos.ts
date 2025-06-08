@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import { PrismaClient, Prisma } from '@prisma/client';
 import path from 'path';
 import fs from 'fs';
+import { authenticateToken } from '../middleware/auth';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -24,12 +25,16 @@ type PhotoWithTags = {
 // New endpoint to get all unique tags
 router.get('/tags', async (req: Request, res: Response) => {
   try {
+    console.log('Fetching all unique tags...');
     const tags = await prisma.tag.findMany({
       select: { name: true },
       distinct: ['name'],
       orderBy: { name: 'asc' },
     });
-    res.json(tags.map(tag => tag.name));
+    console.log('Found tags:', tags);
+    const tagNames = tags.map(tag => tag.name);
+    console.log('Returning tag names:', tagNames);
+    res.json(tagNames);
   } catch (error) {
     console.error('Error fetching tags:', error);
     res.status(500).json({ error: 'Failed to fetch tags' });
@@ -90,6 +95,26 @@ router.get('/user/:userId', async (req, res) => {
   }
 });
 
+// Serve local photos
+router.get('/file/:filename', async (req, res) => {
+  const filename = req.params.filename;
+  const filePath = path.join(PHOTOS_DIR, filename);
+  
+  console.log('Attempting to serve file:', {
+    filename,
+    filePath,
+    exists: fs.existsSync(filePath)
+  });
+
+  // Check if the file exists before sending
+  if (fs.existsSync(filePath)) {
+    res.sendFile(filePath);
+  } else {
+    console.error('File not found:', filePath);
+    res.status(404).json({ error: 'Photo not found' });
+  }
+});
+
 // Get a single photo by ID with its tags and user information
 router.get('/:id', async (req, res) => {
   try {
@@ -116,19 +141,6 @@ router.get('/:id', async (req, res) => {
   } catch (error) {
     console.error('Error fetching photo:', error);
     res.status(500).json({ error: 'Error fetching photo' });
-  }
-});
-
-// Serve local photos if gcsUrl is not present
-router.get('/:filename', async (req, res) => {
-  const filename = req.params.filename;
-  const filePath = path.join(PHOTOS_DIR, filename);
-
-  // Check if the file exists before sending
-  if (fs.existsSync(filePath)) {
-    res.sendFile(filePath);
-  } else {
-    res.status(404).json({ error: 'Photo not found' });
   }
 });
 
@@ -192,6 +204,49 @@ router.delete('/:photoId/tags', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error removing tag:', error);
     res.status(500).json({ error: 'Failed to remove tag' });
+  }
+});
+
+// Delete a photo
+router.delete('/:id', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
+    // Find the photo first to check ownership
+    const photo = await prisma.photo.findUnique({
+      where: { id: parseInt(id) },
+      select: { userId: true, filename: true }
+    });
+
+    if (!photo) {
+      return res.status(404).json({ error: 'Photo not found' });
+    }
+
+    // Check if the user owns the photo
+    if (photo.userId !== userId) {
+      return res.status(403).json({ error: 'Not authorized to delete this photo' });
+    }
+
+    // Delete the file from storage
+    const filePath = path.join(PHOTOS_DIR, photo.filename);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    // Delete the photo record from the database
+    await prisma.photo.delete({
+      where: { id: parseInt(id) }
+    });
+
+    res.json({ message: 'Photo deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting photo:', error);
+    res.status(500).json({ error: 'Failed to delete photo' });
   }
 });
 

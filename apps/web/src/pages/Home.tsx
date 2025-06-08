@@ -1,132 +1,93 @@
-import { Box, Flex, Heading, Text, VStack, SimpleGrid, Image, Spinner, Center } from '@chakra-ui/react';
+import { Box, Flex, Heading, Text, VStack, SimpleGrid, Image, Spinner, Center, IconButton, useToast, Alert, AlertIcon } from '@chakra-ui/react';
 import { useState, useEffect } from 'react';
-import PhotoModal from '../components/PhotoModal';
+import { DeleteIcon } from '@chakra-ui/icons';
 import { API_ENDPOINTS } from '../config/api';
-
-interface Photo {
-  id: string;
-  url: string;
-  name: string;
-  description: string;
-  tags: string[];
-  timestamp: string;
-}
+import { Photo } from '../types';
+import PhotoCard from '../components/PhotoCard';
+import PhotoModal from '../components/PhotoModal';
+import DeleteConfirmationModal from '../components/DeleteConfirmationModal';
 
 interface HomeProps {
-  selectedFilterTags: string[];
+  currentUserId?: number;
+  selectedFilterTags?: string[];
 }
 
-const API_URL = import.meta.env.VITE_API_URL;
-
-const Home = ({ selectedFilterTags }: HomeProps) => {
+const Home: React.FC<HomeProps> = ({ currentUserId, selectedFilterTags = [] }) => {
   const [photos, setPhotos] = useState<Photo[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
 
   const fetchPhotos = async () => {
     try {
-      setLoading(true);
+      setIsLoading(true);
       setError(null);
       
-      const queryParams = new URLSearchParams();
-      if (selectedFilterTags.length > 0) {
-        selectedFilterTags.forEach(tag => queryParams.append('tags', tag));
-      }
-
-      const response = await fetch(`${API_ENDPOINTS.PHOTOS.BASE}?${queryParams.toString()}`);
+      const response = await fetch(API_ENDPOINTS.PHOTOS.BASE);
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error('Failed to fetch photos');
       }
-      const data: Photo[] = await response.json();
-      setPhotos(data);
       
-      // Update selected photo if it exists
-      if (selectedPhoto) {
-        const updatedPhoto = data.find(p => p.id === selectedPhoto.id);
-        if (updatedPhoto) {
-          setSelectedPhoto(updatedPhoto);
-        }
-      }
-    } catch (e: any) {
-      setError(`Failed to fetch photos: ${e.message}`);
-      console.error("Error fetching photos:", e);
+      const data = await response.json();
+      setPhotos(data);
+    } catch (error) {
+      console.error('Error fetching photos:', error);
+      setError('Failed to load photos. Please try again later.');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
     fetchPhotos();
-  }, [selectedFilterTags]);
+  }, []);
+
+  const handlePhotoDelete = () => {
+    // Refresh the photos list after deletion
+    fetchPhotos();
+  };
 
   return (
-    <Flex
-      direction="column"
-      width="100%"
-      flex="1"
-    >
-      {/* Main Content - Image Viewer */}
-      <Box flex="1" p={6} overflowY="auto"> 
-        {/* <Heading mb={6} textAlign="center" color="gray.800">Your Photos</Heading> */}
-        
-        {loading && (
-          <Center py={10}>
-            <Spinner size="xl" />
-          </Center>
-        )}
+    <Box maxW="container.xl" mx="auto" px={4} py={8}>
+      <Heading as="h1" size="xl" mb={8}>
+        Family Photos
+      </Heading>
+      
+      {error && (
+        <Alert status="error" mb={4}>
+          <AlertIcon />
+          {error}
+        </Alert>
+      )}
 
-        {error && (
-          <Center py={10}>
-            <Text color="red.500">{error}</Text>
-          </Center>
-        )}
-
-        {!loading && !error && photos.length === 0 && (
-          <Center py={10}>
-            <Text color="gray.500">No photos uploaded yet. Upload some from the sidebar!</Text>
-          </Center>
-        )}
-
+      {isLoading ? (
+        <Center py={10}>
+          <Spinner size="xl" />
+        </Center>
+      ) : (
         <SimpleGrid columns={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing={6}>
           {photos.map((photo) => (
-            <Box 
-              key={photo.id} 
-              borderWidth="1px" 
-              borderRadius="lg" 
-              overflow="hidden" 
-              boxShadow="md"
-              cursor="pointer"
+            <PhotoCard
+              key={photo.id}
+              photo={photo}
               onClick={() => setSelectedPhoto(photo)}
-              _hover={{ transform: 'scale(1.02)', transition: 'transform 0.2s' }}
-            >
-              <Image src={`${API_URL}${photo.url}`} alt={photo.description || photo.name} w="100%" h="200px" objectFit="cover" />
-              <Box p="4">
-                <Text fontWeight="semibold" fontSize="md">{photo.description || 'Untitled'}</Text>
-                {photo.tags && photo.tags.length > 0 && (
-                  <Text fontSize="sm" color="gray.500" mt={1}>
-                    {photo.tags.join(', ')}
-                  </Text>
-                )}
-              </Box>
-            </Box>
+              onDelete={handlePhotoDelete}
+              currentUserId={currentUserId}
+            />
           ))}
         </SimpleGrid>
-      </Box>
+      )}
 
-      <PhotoModal
-        isOpen={!!selectedPhoto}
-        onClose={() => setSelectedPhoto(null)}
-        photo={selectedPhoto ? {
-          id: selectedPhoto.id,
-          url: `${API_URL}${selectedPhoto.url}`,
-          description: selectedPhoto.description,
-          tags: selectedPhoto.tags,
-          timestamp: selectedPhoto.timestamp
-        } : null}
-        onPhotoUpdate={fetchPhotos}
-      />
-    </Flex>
+      {selectedPhoto && (
+        <PhotoModal
+          photo={selectedPhoto}
+          onClose={() => setSelectedPhoto(null)}
+          currentUserId={currentUserId}
+          onDelete={handlePhotoDelete}
+        />
+      )}
+    </Box>
   );
 };
 
