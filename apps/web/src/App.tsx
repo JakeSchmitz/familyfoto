@@ -1,9 +1,11 @@
 import { ChakraProvider } from '@chakra-ui/react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import Login from './pages/Login';
 import Home from './pages/Home';
 import Layout from './components/Layout';
+import { AuthProvider } from './contexts/AuthContext';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -49,26 +51,30 @@ function App() {
 
   return (
     <ChakraProvider>
-      <Router>
-        <Routes>
-          <Route path="/login" element={<Login setIsLoggedIn={setIsLoggedIn} />} />
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute 
-                isLoggedIn={isLoggedIn} 
-                handleLogout={handleLogout}
-                onPhotoUploadSuccess={handlePhotoUploadSuccess}
-                selectedFilterTags={selectedFilterTags}
-                onFilterTagsChange={handleFilterTagsChange}
-                tagsRefreshKey={tagsRefreshKey}
-              >
-                <Home key={homeKey} selectedFilterTags={selectedFilterTags} />
-              </ProtectedRoute>
-            }
-          />
-        </Routes>
-      </Router>
+      <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}>
+        <AuthProvider>
+          <Router>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route
+                path="/"
+                element={
+                  <ProtectedRoute 
+                    isLoggedIn={isLoggedIn} 
+                    handleLogout={handleLogout}
+                    onPhotoUploadSuccess={handlePhotoUploadSuccess}
+                    selectedFilterTags={selectedFilterTags}
+                    onFilterTagsChange={handleFilterTagsChange}
+                    tagsRefreshKey={tagsRefreshKey}
+                  >
+                    <Home key={homeKey} selectedFilterTags={selectedFilterTags} />
+                  </ProtectedRoute>
+                }
+              />
+            </Routes>
+          </Router>
+        </AuthProvider>
+      </GoogleOAuthProvider>
     </ChakraProvider>
   );
 }

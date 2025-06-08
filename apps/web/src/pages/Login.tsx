@@ -1,29 +1,35 @@
 import { Box, Button, Flex, Heading, Text, VStack } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
-import { Dispatch, SetStateAction } from 'react';
-import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
+import { useState } from 'react';
+import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
+import { useAuth } from '../contexts/AuthContext';
 
-interface LoginProps {
-  setIsLoggedIn: Dispatch<SetStateAction<boolean>>;
-}
-
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-
-const Login = ({ setIsLoggedIn }: LoginProps) => {
+const Login = () => {
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { login } = useAuth();
 
-  const handleGoogleLoginSuccess = async (credentialResponse: any) => {
-    console.log('Google login successful:', credentialResponse);
-    // TODO: Send credentialResponse.credential to your backend for verification
-    // For now, directly set isLoggedIn to true and navigate
-    localStorage.setItem('isLoggedIn', 'true');
-    setIsLoggedIn(true);
-    navigate('/');
-  };
+  const handleGoogleLoginSuccess = async (credentialResponse: CredentialResponse) => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/google`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ credential: credentialResponse.credential }),
+      });
 
-  const handleGoogleLoginError = () => {
-    console.error('Google login failed');
-    // Display an error message to the user
+      if (!response.ok) {
+        throw new Error('Login failed');
+      }
+
+      const data = await response.json();
+      await login(data.token, data.user);
+      navigate('/');
+    } catch (error) {
+      console.error('Login error:', error);
+      setError('Login failed. Please try again.');
+    }
   };
 
   return (
@@ -62,16 +68,15 @@ const Login = ({ setIsLoggedIn }: LoginProps) => {
           >
             <VStack spacing={6}>
               <Heading size="md" textAlign="center">Sign in to continue</Heading>
-              <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-                <GoogleLogin
-                  onSuccess={handleGoogleLoginSuccess}
-                  onError={handleGoogleLoginError}
-                  type="standard"
-                  theme="outline"
-                  size="large"
-                  width="480"
-                />
-              </GoogleOAuthProvider>
+              {error && <Text color="red.500">{error}</Text>}
+              <GoogleLogin
+                onSuccess={handleGoogleLoginSuccess}
+                onError={() => setError('Google login failed')}
+                type="standard"
+                theme="outline"
+                size="large"
+                width="480"
+              />
             </VStack>
           </Box>
         </VStack>
@@ -83,7 +88,7 @@ const Login = ({ setIsLoggedIn }: LoginProps) => {
         py={6}
         px={4}
         bg="rgba(0, 0, 0, 0.7)"
-        borderTop="1px"
+        borderTop="1"
         borderColor="whiteAlpha.300"
         zIndex={1}
       >

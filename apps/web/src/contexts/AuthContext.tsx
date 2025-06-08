@@ -1,10 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User } from '../types';
-import { API_ENDPOINTS } from '../config/api';
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (token: string, userData: User) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -20,42 +19,74 @@ export const useAuth = () => {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+      const storedUser = localStorage.getItem('user');
+      return storedUser ? JSON.parse(storedUser) : null;
+    } catch (error) {
+      console.error('Error parsing stored user data:', error);
+      // Clear invalid data
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+      localStorage.removeItem('isLoggedIn');
+      return null;
+    }
+  });
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    try {
+      return localStorage.getItem('isLoggedIn') === 'true';
+    } catch (error) {
+      console.error('Error reading authentication state:', error);
+      return false;
+    }
+  });
 
   useEffect(() => {
     // Check if user is already logged in
     const checkAuth = async () => {
       try {
-        const response = await fetch(API_ENDPOINTS.AUTH.ME);
+        const token = localStorage.getItem('token');
+        if (!token) {
+          setIsAuthenticated(false);
+          setUser(null);
+          return;
+        }
+
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/me`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
         if (response.ok) {
           const userData = await response.json();
           setUser(userData);
           setIsAuthenticated(true);
+        } else {
+          // Token is invalid or expired
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          localStorage.removeItem('isLoggedIn');
+          setUser(null);
+          setIsAuthenticated(false);
         }
       } catch (error) {
         console.error('Error checking authentication:', error);
+        setUser(null);
+        setIsAuthenticated(false);
       }
     };
 
     checkAuth();
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = async (token: string, userData: User) => {
     try {
-      const response = await fetch(API_ENDPOINTS.AUTH.LOGIN, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Login failed');
-      }
-
-      const userData = await response.json();
+      // Store the token and user data
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(userData));
+      localStorage.setItem('isLoggedIn', 'true');
+      
       setUser(userData);
       setIsAuthenticated(true);
     } catch (error) {
@@ -65,9 +96,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('isLoggedIn');
     setUser(null);
     setIsAuthenticated(false);
-    // You might want to call a logout endpoint here
   };
 
   return (

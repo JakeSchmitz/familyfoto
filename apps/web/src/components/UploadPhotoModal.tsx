@@ -193,6 +193,9 @@ const UploadPhotoModal = ({ isOpen, onClose, onUploadSuccess }: UploadPhotoModal
     try {
       const response = await fetch(API_ENDPOINTS.PHOTOS.UPLOAD, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
         body: formData,
       });
 

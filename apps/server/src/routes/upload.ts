@@ -6,9 +6,18 @@ import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { getExifData } from '../utils/exif';
 import { getLocationFromExif } from '../utils/geocoding';
+import { authenticateToken } from '../middleware/auth';
 
 const router = Router();
 const prisma = new PrismaClient();
+
+// Define uploads directory
+const UPLOADS_DIR = process.env.PHOTOS_DIR || path.join(__dirname, '../../uploads');
+
+// Ensure uploads directory exists
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
 
 // Configure multer for memory storage
 const upload = multer({
@@ -49,7 +58,8 @@ declare global {
   }
 }
 
-router.post('/', upload.single('photo'), async (req, res) => {
+// Add authentication middleware to the upload route
+router.post('/', authenticateToken, upload.single('photo'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -62,12 +72,7 @@ router.post('/', upload.single('photo'), async (req, res) => {
     const file = req.file;
     const fileExtension = path.extname(file.originalname);
     const fileName = `${uuidv4()}${fileExtension}`;
-    const filePath = path.join('uploads', fileName);
-
-    // Create uploads directory if it doesn't exist
-    if (!fs.existsSync('uploads')) {
-      fs.mkdirSync('uploads');
-    }
+    const filePath = path.join(UPLOADS_DIR, fileName);
 
     // Write file to disk
     fs.writeFileSync(filePath, file.buffer);
